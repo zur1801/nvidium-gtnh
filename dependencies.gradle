@@ -41,11 +41,12 @@ minecraft {
 
 
 
-// The Distant Horizons 1.7.10 port is not published to a Maven repository, so fetch the release jar once
-def distantHorizonsJar = file("libs/DistantHorizons-upstream-preview7.jar")
+// The Distant Horizons 1.7.10 port is not published to a Maven repository, so fetch its release jar once.
+// It is compile-only (used for the textured LOD hooks) and never bundled; the version is set in gradle.properties.
+def distantHorizonsJar = file("libs/DistantHorizons-${distantHorizonsVersion}.jar")
 if (!distantHorizonsJar.exists()) {
     distantHorizonsJar.parentFile.mkdirs()
-    def url = "https://github.com/DarkShadow44/DistantHorizonsStandalone/releases/download/upstream-preview7/DistantHorizons-upstream-preview7.jar"
+    def url = "https://github.com/DarkShadow44/DistantHorizonsStandalone/releases/download/${distantHorizonsVersion}/DistantHorizons-${distantHorizonsVersion}.jar"
     logger.lifecycle("Downloading Distant Horizons API jar from ${url}")
     new URL(url).withInputStream { input -> distantHorizonsJar.withOutputStream { it << input } }
 }
