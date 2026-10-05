@@ -47,8 +47,9 @@ public class TemporalTerrainRasterizer extends Phase {
         GL45C.glSamplerParameteri(lightSampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     }
 
-    public void raster(int regionCount, int commandBufferId) {
+    public void raster(int firstRegion, int regionCount, int commandBufferId) {
         shader.bind();
+        MeshShaderDispatcher.INSTANCE.setDrawIdOffset(shader.getId(), firstRegion);
 
         int blockId = Minecraft.getMinecraft()
             .getTextureManager()
@@ -64,7 +65,7 @@ public class TemporalTerrainRasterizer extends Phase {
         GL45C.glBindSampler(1, lightSampler);
 
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, commandBufferId);
-        MeshShaderDispatcher.INSTANCE.multiDrawMeshTasksIndirect(0, regionCount, 16);
+        MeshShaderDispatcher.INSTANCE.multiDrawMeshTasksIndirect(firstRegion * 16L, regionCount, 16);
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
 
         GL45C.glBindSampler(0, 0);

@@ -59,6 +59,8 @@ public class ShaderLoader {
         }
 
         builder.add("TEXTURE_MAX_SCALE", String.valueOf(NvidiumCompactChunkVertex.TEXTURE_MAX_VALUE));
+        builder
+            .add("DEPTH_SPLIT_DISTANCE", String.valueOf((float) me.cortex.nvidium.RenderPipeline.DEPTH_SPLIT_DISTANCE));
         constantBuilder.accept(builder);
 
         return ShaderParser.parseShader(

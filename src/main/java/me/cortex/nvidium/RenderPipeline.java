@@ -42,6 +42,7 @@ import org.joml.Vector4i;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11C;
 import org.lwjgl.opengl.GL30C;
+import org.lwjgl.opengl.GL45C;
 import org.lwjgl.system.MemoryUtil;
 
 import it.unimi.dsi.fastutil.ints.IntAVLTreeSet;
@@ -90,12 +91,15 @@ public class RenderPipeline {
     private SortRegionSectionPhase regionSectionSorter;
 
     private final SsboBuffer sceneUniform;
+    private final SceneEnvironment environment = new SceneEnvironment();
     private final SsboBuffer regionIndicies;
     private static final int SCENE_SIZE = (int) alignUp(4 * 4 * 4 + // mat4 MVP
         4 * 4 * 4 + // mat4 MVPInv (Optional)
         4 * 4 + // ivec4 chunkPosition
         4 * 4 + // vec4 subchunkOffset
         4 * 4 + // vec4 fogColour
+        4 * 4 + // vec4 lightDirection
+        4 * 4 + // vec4 lightColour
         4 * 2 + // vec2 screenSize
         4 * 2 + // vec2 texCoordShrink
         4 + // float fogStart
@@ -204,6 +208,22 @@ public class RenderPipeline {
     }
 
     private int prevRegionCount;
+
+    /**
+     * Depth partitioning: the 24-bit depth buffer cannot tell surfaces a few blocks apart at long range (with the
+     * 0.05 near plane, about 2.5 blocks at 1500 blocks), so distant leaves, grass and snow z-fight. Terrain is drawn
+     * twice: first everything with a projection whose near plane is this distance (the GPU clips what is closer),
+     * then the depth buffer is cleared and the regions within this distance are drawn with Minecraft's projection and
+     * a clip plane at this distance. Every pixel is split exactly at this view depth, each half gets the full depth
+     * precision, and nearby depth stays identical to what entities, particles and clouds use.
+     */
+    public static final double DEPTH_SPLIT_DISTANCE = 160;
+    // Regions reaching into this distance; regions are sorted near to far, so they form a prefix of the list
+    private int prevNearRegionCount;
+    private boolean prevDepthSplit;
+    private final Matrix4f nearMvp = new Matrix4f();
+    private final Matrix4f farMvp = new Matrix4f();
+    private final java.nio.ByteBuffer matrixScratch = MemoryUtil.memAlloc(4 * 4 * 4 * 2);
     private int frameId;
     private boolean compiledForFog = false;
 
@@ -261,6 +281,8 @@ public class RenderPipeline {
         float subTexelHeight = (float) (subTexelOffset - (((1.0D / textureAtlas.getIconHeight()) / subTexelPrecision)));
 
         int visibleRegions = 0;
+        int nearRegions = 0;
+        boolean depthSplit = false;
 
         long queryAddr = 0;
         var rm = sectionManager.getRegionManager();
@@ -285,7 +307,16 @@ public class RenderPipeline {
                     // Note, its sorted like this because of overdraw, also the translucency command buffer is written
                     // to
                     // in a reverse order to this in the section_raster/task.glsl shader
-                    regions.add(((rm.distance(i, chunkPos.x, chunkPos.y, chunkPos.z)) << 16) | i);
+                    double distance = rm.nearestDistance(i, px, py, pz);
+                    regions.add(((int) Math.min(distance, 32767) << 16) | i);
+                    if (distance < DEPTH_SPLIT_DISTANCE) {
+                        nearRegions++;
+                    }
+                    // A region is at most ~192 blocks across, so anything this close may still lie entirely in front
+                    // of the split; only bother splitting once something can reach past it
+                    if (distance + 192 > DEPTH_SPLIT_DISTANCE) {
+                        depthSplit = true;
+                    }
                     visibleRegions++;
                     regionVisibilityTracker.set(i);
 
@@ -334,10 +365,15 @@ public class RenderPipeline {
                 (float) (py - (chunkPos.y << 4)),
                 (float) (pz - (chunkPos.z << 4)));
             delta.negate();
+            environment.update();
             long addr = uploadStream.upload(sceneUniform, 0, SCENE_SIZE);
-            new Matrix4f(crm.projection()).mul(crm.modelView())
-                .translate(delta)// Translate the subchunk position
-                .getToAddress(addr);
+            nearMvp.set(crm.projection())
+                .mul(crm.modelView())
+                .translate(delta);// Translate the subchunk position
+            farMvp.set(withNearPlane(crm.projection(), (float) DEPTH_SPLIT_DISTANCE))
+                .mul(crm.modelView())
+                .translate(delta);
+            nearMvp.getToAddress(addr);
             addr += 4 * 4 * 4;
             if (this.compiledForFog) {
                 new Matrix4f(crm.projection()).mul(crm.modelView())
@@ -349,7 +385,11 @@ public class RenderPipeline {
             addr += 16;
             new Vector4f(new Vector3f(delta), 0).getToAddress(addr);// Subchunk offset (note, delta is already negated)
             addr += 16;
-            new Vector4f(0, 0, 0, 1).getToAddress(addr); // Fog color
+            environment.fogColour.getToAddress(addr); // Fog colour, alpha 255 = fog on
+            addr += 16;
+            environment.lightDirection.getToAddress(addr);
+            addr += 16;
+            environment.lightColour.getToAddress(addr);
             addr += 16;
             // Convert it into the expected size values and floats
             MemoryUtil.memPutFloat(addr, ((float) screenWidth) / 2);
@@ -360,11 +400,11 @@ public class RenderPipeline {
             addr += 4;
             MemoryUtil.memPutFloat(addr, subTexelHeight);
             addr += 4;
-            MemoryUtil.memPutFloat(addr, 0);// FogStart
+            MemoryUtil.memPutFloat(addr, environment.fogStart);
             addr += 4;
-            MemoryUtil.memPutFloat(addr, 0);// FogEnd
+            MemoryUtil.memPutFloat(addr, environment.fogEnd);
             addr += 4;
-            MemoryUtil.memPutInt(addr, 0);// IsSphericalFog
+            MemoryUtil.memPutInt(addr, 1);// isCylindricalFog, like Celeritas' terrain fog
             addr += 4;
             int flags = 0;
             flags |= Nvidium.Compat.getUseBlockFaceCulling() ? 1 : 0;
@@ -405,7 +445,27 @@ public class RenderPipeline {
         glEnable(GL_DEPTH_CLAMP);
         if (prevRegionCount != 0) {
             glEnable(GL_DEPTH_TEST);
-            terrainRasterizer.raster(prevRegionCount, terrainCommandBuffer.getId(), primaryFrameTimeProfiler);
+            if (prevDepthSplit) {
+                // Far half: everything, with the split as near plane. Depth clamping is turned off so the GPU really
+                // clips what is closer. Water/glass is drawn back to front right after, before its depth is lost.
+                glDisable(GL_DEPTH_CLAMP);
+                writeSceneMatrices(farMvp);
+                terrainRasterizer.raster(0, prevRegionCount, terrainCommandBuffer.getId(), primaryFrameTimeProfiler);
+                drawTranslucent(0, prevRegionCount, null);
+                writeSceneMatrices(nearMvp);
+                glEnable(GL_DEPTH_CLAMP);
+
+                // Near half: Minecraft's projection, clipped at the split
+                glDepthMask(true);
+                GL11C.glClear(GL11C.GL_DEPTH_BUFFER_BIT);
+                if (prevNearRegionCount > 0) {
+                    glEnable(GL30C.GL_CLIP_DISTANCE0);
+                    terrainRasterizer.raster(0, prevNearRegionCount, terrainCommandBuffer.getId(), null);
+                    glDisable(GL30C.GL_CLIP_DISTANCE0);
+                }
+            } else {
+                terrainRasterizer.raster(0, prevRegionCount, terrainCommandBuffer.getId(), primaryFrameTimeProfiler);
+            }
             glMemoryBarrier(GL_FRAMEBUFFER_BARRIER_BIT);
         }
 
@@ -454,9 +514,21 @@ public class RenderPipeline {
         // Do temporal rasterization
         if (Nvidium.config.enable_temporal_coherence) {
             glMemoryBarrier(GL_COMMAND_BARRIER_BIT);
-            temporalRasterizer.raster(visibleRegions, terrainCommandBuffer.getId());
+            if (depthSplit) {
+                // The depth buffer now holds the near half only, so newly visible sections are drawn clipped to it;
+                // their far parts show up next frame in the far half
+                if (nearRegions > 0) {
+                    glEnable(GL30C.GL_CLIP_DISTANCE0);
+                    temporalRasterizer.raster(0, nearRegions, terrainCommandBuffer.getId());
+                    glDisable(GL30C.GL_CLIP_DISTANCE0);
+                }
+            } else {
+                temporalRasterizer.raster(0, visibleRegions, terrainCommandBuffer.getId());
+            }
         }
         prevRegionCount = visibleRegions;
+        prevNearRegionCount = nearRegions;
+        prevDepthSplit = depthSplit;
 
         {// Do proper visibility tracking
             glDepthMask(false);
@@ -532,6 +604,39 @@ public class RenderPipeline {
     private static final int ONE_MINUS_SRC_ALPHA = 771;
     private static final int ONE = 1;
 
+    private void drawTranslucent(int firstCommand, int count, FrameTimeProfiler profiler) {
+        glEnable(GL_DEPTH_TEST);
+        Nvidium.Compat.enableBlend();
+        Nvidium.Compat.blendFuncSeperate(SRC_ALPHA, ONE_MINUS_SRC_ALPHA, ONE, ONE_MINUS_SRC_ALPHA);
+        translucencyTerrainRasterizer.raster(firstCommand, count, translucencyCommandBuffer.getId(), profiler);
+        Nvidium.Compat.disableBlend();
+        Nvidium.Compat.blendFuncSeperate(770, 771, 1, 0);
+    }
+
+    /** Overwrites the scene's view-projection matrix (and its inverse, used for fog) between draws. */
+    private void writeSceneMatrices(Matrix4f mvp) {
+        mvp.get(0, matrixScratch);
+        int bytes = 4 * 4 * 4;
+        if (this.compiledForFog) {
+            new Matrix4f(mvp).invert()
+                .get(bytes, matrixScratch);
+            bytes *= 2;
+        }
+        matrixScratch.limit(bytes)
+            .position(0);
+        GL45C.glNamedBufferSubData(sceneUniform.getId(), 0, matrixScratch);
+        matrixScratch.clear();
+    }
+
+    /** The same perspective projection with a different near plane (keeps the far plane). */
+    private static Matrix4f withNearPlane(Matrix4fc projection, float near) {
+        Matrix4f result = new Matrix4f(projection);
+        float far = projection.perspectiveFar();
+        result.m22(-(far + near) / (far - near));
+        result.m32(-2 * far * near / (far - near));
+        return result;
+    }
+
     // Translucency is rendered in a very cursed and incorrect way
     // it hijacks the unassigned indirect command dispatch and uses that to dispatch the translucent chunks as well
     public void renderTranslucent() {
@@ -540,16 +645,20 @@ public class RenderPipeline {
         bindBuffers();
         // Translucency sorting
         {
-            glEnable(GL_DEPTH_TEST);
-            Nvidium.Compat.enableBlend();
-            Nvidium.Compat.blendFuncSeperate(SRC_ALPHA, ONE_MINUS_SRC_ALPHA, ONE, ONE_MINUS_SRC_ALPHA);
-
-            translucencyTerrainRasterizer
-                .raster(prevRegionCount, translucencyCommandBuffer.getId(), transluscentFrameTimeProfiler);
-            Nvidium.Compat.disableBlend();
-            Nvidium.Compat.blendFuncSeperate(770, 771, 1, 0);
-            // glDisable(GL_DEPTH_TEST);
-
+            if (prevDepthSplit) {
+                // The far half was drawn in renderFrame before the depth buffer was cleared. Translucent commands are
+                // far-to-near, so the regions reaching into the near half are the last ones.
+                if (prevNearRegionCount > 0) {
+                    glEnable(GL30C.GL_CLIP_DISTANCE0);
+                    drawTranslucent(
+                        prevRegionCount - prevNearRegionCount,
+                        prevNearRegionCount,
+                        transluscentFrameTimeProfiler);
+                    glDisable(GL30C.GL_CLIP_DISTANCE0);
+                }
+            } else {
+                drawTranslucent(0, prevRegionCount, transluscentFrameTimeProfiler);
+            }
         }
 
         // Download statistics
@@ -574,6 +683,7 @@ public class RenderPipeline {
 
     public void delete() {
         regionVisibilityTracking.delete();
+        MemoryUtil.memFree(matrixScratch);
 
         sceneUniform.delete();
         regionIndicies.delete();

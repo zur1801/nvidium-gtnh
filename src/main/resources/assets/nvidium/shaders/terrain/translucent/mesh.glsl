@@ -72,7 +72,10 @@ void emitVertex(uint vertexBaseId, uint innerId) {
     Vertex V = terrainData[vertexBaseId + innerId];
     uint outId = (gl_LocalInvocationID.x<<2)+innerId;
     vec3 pos = decodeVertexPosition(V)+originAndBaseData.xyz;
-    MESHVERTICES[outId].gl_Position = MVP*vec4(pos,1.0);
+    vec4 clipPos = MVP*vec4(pos,1.0);
+    MESHVERTICES[outId].gl_Position = clipPos;
+    // Positive closer than the depth split; only enabled (GL_CLIP_DISTANCE0) for the near pass
+    MESHVERTICES[outId].gl_ClipDistance[0] = DEPTH_SPLIT_DISTANCE - clipPos.w;
 
 #ifndef USE_NV_FRAGMENT_SHADER_BARYCENTRIC
     #ifdef RENDER_FOG

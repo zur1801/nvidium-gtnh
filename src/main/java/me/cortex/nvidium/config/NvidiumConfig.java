@@ -21,6 +21,8 @@ public class NvidiumConfig {
 
     public boolean mesh_cache = true;
 
+    public boolean sun_lighting = true;
+
     public boolean render_fog = true;
     public boolean use_sodium_vertex_format = false;
     public boolean cull_degenerate_triangles = true;
@@ -79,6 +81,11 @@ public class NvidiumConfig {
             Configuration.CATEGORY_GENERAL,
             mesh_cache,
             "Keep built terrain on disk (.minecraft/nvidium-cache) so it shows immediately after rejoining a server.");
+        sun_lighting = config.getBoolean(
+            "sun_lighting",
+            Configuration.CATEGORY_GENERAL,
+            sun_lighting,
+            "Light terrain from the current sun or moon direction instead of Minecraft's fixed per-face shading.");
         render_fog = config.getBoolean(
             "render_fog",
             Configuration.CATEGORY_GENERAL,
@@ -136,6 +143,9 @@ public class NvidiumConfig {
         config.getCategory(Configuration.CATEGORY_GENERAL)
             .get("render_fog")
             .set(render_fog);
+        config.getCategory(Configuration.CATEGORY_GENERAL)
+            .get("sun_lighting")
+            .set(sun_lighting);
         config.getCategory(Configuration.CATEGORY_GENERAL)
             .get("use_sodium_vertex_format")
             .set(use_sodium_vertex_format);

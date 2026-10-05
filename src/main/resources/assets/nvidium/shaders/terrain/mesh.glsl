@@ -181,11 +181,14 @@ void main() {
     //Common vertex depending on warp id
     putVertex(vertBase, triangle0 ? V0 : V2);
     MESHVERTICES[vertBase].gl_Position = triangle0 ? pV0 : pV2;
+    // Positive closer than the depth split; only enabled (GL_CLIP_DISTANCE0) for the near pass
+    MESHVERTICES[vertBase].gl_ClipDistance[0] = DEPTH_SPLIT_DISTANCE - (triangle0 ? pV0 : pV2).w;
 
     // The third vertex of our triangle if it hasn't been culled
     if (draw) {
         putVertex(vertBase + 1, V);
         MESHVERTICES[vertBase + 1].gl_Position = pV;
+        MESHVERTICES[vertBase + 1].gl_ClipDistance[0] = DEPTH_SPLIT_DISTANCE - pV.w;
 
         SET_MESH_PRIMITIVE_TRIANGLE_INDICIES(triIndex, 0, vertBase + 0); // Common vertex
         SET_MESH_PRIMITIVE_TRIANGLE_INDICIES(triIndex, 1, vertBase + 1); // Unique vertex

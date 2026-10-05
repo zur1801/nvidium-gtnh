@@ -11,6 +11,10 @@
 
 #import <nvidium:occlusion/scene.glsl>
 
+// First command of this draw within the command buffer: gl_DrawID restarts at 0 for every draw call, and terrain is
+// drawn in a near and a far slice (depth partitioning). Only used with GL_EXT_mesh_shader.
+layout(location = 7) uniform uint drawIdOffset;
+
 
 //This is 1 since each task shader workgroup -> multiple meshlets. its not each globalInvocation (afaik)
 layout(local_size_x=1) in;
@@ -27,7 +31,7 @@ bool shouldRenderVisible(uint sectionId) {
 
 void main() {
     #ifdef USE_GL_EXT_MESH_SHADERS
-    uint sectionId = terrainCommandBuffer[gl_DrawID].w + gl_WorkGroupID.x;
+    uint sectionId = terrainCommandBuffer[gl_DrawID + drawIdOffset].w + gl_WorkGroupID.x;
     #else
     uint sectionId = gl_WorkGroupID.x;
     #endif

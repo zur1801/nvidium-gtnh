@@ -20,6 +20,20 @@ public class MeshShaderDispatcher {
         this.isEXT = GL.getCapabilities().GL_EXT_mesh_shader;
     }
 
+    public boolean usesExtMeshShaders() {
+        return isEXT;
+    }
+
+    /**
+     * Tells a terrain task shader where its slice of the command buffer starts. GL_EXT_mesh_shader task shaders index
+     * the command buffer with gl_DrawID, which restarts at 0 for every multi-draw.
+     */
+    public void setDrawIdOffset(int program, int firstCommand) {
+        if (isEXT) {
+            org.lwjgl.opengl.GL41C.glProgramUniform1ui(program, 7, firstCommand);
+        }
+    }
+
     public void drawMeshTasks(int first, int count) {
         if (isEXT) {
             glDrawMeshTasksEXT(count, 1, 1);

@@ -319,6 +319,16 @@ public class RegionManager {
         return this.sectionBuffer.getId();
     }
 
+    /** Distance in blocks from a point to the closest point of a region's bounding box. */
+    public double nearestDistance(int regionId, double x, double y, double z) {
+        var region = this.regions[regionId];
+        double minX = region.rx << 7, minY = region.ry << 6, minZ = region.rz << 7;
+        double dx = Math.max(Math.max(minX - x, x - (minX + 128)), 0);
+        double dy = Math.max(Math.max(minY - y, y - (minY + 64)), 0);
+        double dz = Math.max(Math.max(minZ - z, z - (minZ + 128)), 0);
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
     /** Chebyshev distance in chunks between the camera column and the centre of a region. */
     public int horizontalDistance(int regionId, int camChunkX, int camChunkZ) {
         var region = this.regions[regionId];

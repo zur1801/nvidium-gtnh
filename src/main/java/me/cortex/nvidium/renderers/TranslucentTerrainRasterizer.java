@@ -56,8 +56,9 @@ public class TranslucentTerrainRasterizer extends Phase {
 
     // Translucency is rendered in a very cursed and incorrect way
     // it hijacks the unassigned indirect command dispatch and uses that to dispatch the translucent chunks as well
-    public void raster(int regionCount, int commandBufferID, FrameTimeProfiler frameTimeProfiler) {
+    public void raster(int firstRegion, int regionCount, int commandBufferID, FrameTimeProfiler frameTimeProfiler) {
         shader.bind();
+        MeshShaderDispatcher.INSTANCE.setDrawIdOffset(shader.getId(), firstRegion);
 
         int blockId = Minecraft.getMinecraft()
             .getTextureManager()
@@ -73,9 +74,9 @@ public class TranslucentTerrainRasterizer extends Phase {
 
         // the +8*6 is to offset to the unassigned dispatch
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, commandBufferID);
-        frameTimeProfiler.startQuery();
-        MeshShaderDispatcher.INSTANCE.multiDrawMeshTasksIndirect(0, regionCount, 16);
-        frameTimeProfiler.endQuery();
+        if (frameTimeProfiler != null) frameTimeProfiler.startQuery();
+        MeshShaderDispatcher.INSTANCE.multiDrawMeshTasksIndirect(firstRegion * 16L, regionCount, 16);
+        if (frameTimeProfiler != null) frameTimeProfiler.endQuery();
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
         GL45C.glBindSampler(0, 0);
         GL45C.glBindSampler(1, 0);

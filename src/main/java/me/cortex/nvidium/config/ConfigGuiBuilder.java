@@ -119,6 +119,16 @@ public class ConfigGuiBuilder {
                         .build())
                 .add(
                     OptionImpl.createBuilder(boolean.class, store)
+                        .setName(I18n.format("nvidium.options.sun_lighting.name"))
+                        .setTooltip(I18n.format("nvidium.options.sun_lighting.tooltip"))
+                        .setControl(TickBoxControl::new)
+                        .setBinding((opts, value) -> opts.sun_lighting = value, opts -> opts.sun_lighting)
+                        .setEnabled(Nvidium.IS_ENABLED)
+                        .setImpact(OptionImpact.LOW)
+                        .setFlags()
+                        .build())
+                .add(
+                    OptionImpl.createBuilder(boolean.class, store)
                         .setName(I18n.format("nvidium.options.render_fog.name"))
                         .setTooltip(I18n.format("nvidium.options.render_fog.tooltip"))
                         .setControl(TickBoxControl::new)

@@ -14,6 +14,7 @@ layout(binding = 1) uniform sampler2D tex_light;
 
 #import <nvidium:occlusion/scene.glsl>
 #import <nvidium:terrain/vertex_format/vertex_format.glsl>
+#import <nvidium:terrain/lighting.glsl>
 
 
 
@@ -97,6 +98,18 @@ void main() {
     #else
         colour.rgb *= IN.v_colour;
     #endif
+
+    // One sky light value per face: smooth lighting varies it per corner, and interpolating it per triangle shows
+    // the quad's diagonal once the lighting below amplifies it
+    uint quadBase = quadId << 2;
+    float skyLight = max(max(decodeLightUV(terrainData[quadBase]).y, decodeLightUV(terrainData[quadBase + 1]).y),
+                         max(decodeLightUV(terrainData[quadBase + 2]).y, decodeLightUV(terrainData[quadBase + 3]).y));
+
+    vec3 normal = triangleNormal(V0, Vp, V2);
+    if (!gl_FrontFacing) {
+        normal = -normal;
+    }
+    colour.rgb *= computeSunShading(normal, skyLight);
 
     #ifdef RENDER_FOG
     applyFog(colour.rgb);

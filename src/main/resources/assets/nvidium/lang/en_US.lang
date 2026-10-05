@@ -30,3 +30,5 @@ nvidium.options.statistics_level.quads=Quads
 nvidium.options.statistics_level.cull=Culled triangles
 nvidium.options.render_fog.name=Render Fog
 nvidium.options.render_fog.tooltip=Should fog be rendered
+nvidium.options.sun_lighting.name=Sun lighting
+nvidium.options.sun_lighting.tooltip=Light terrain from the direction of the sun or moon instead of Minecraft's fixed per-face shading. Only affects surfaces that can see the sky.

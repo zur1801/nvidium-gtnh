@@ -90,6 +90,8 @@ layout(std430, binding=0) readonly restrict buffer SceneData {
     ivec4 chunkPosition;
     vec4 subchunkOffset;
     vec4 fogColour;
+    vec4 lightDirection;// xyz: world space direction towards the sun or moon, w: direct light strength (0 = off)
+    vec4 lightColour;// rgb: colour of the direct light (warm at sunrise/sunset, cool for the moon)
 
     //vec4  subChunkPosition;//The subChunkTranslation is already done inside the MVP
     //align(8)

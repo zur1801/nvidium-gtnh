@@ -49,8 +49,9 @@ public class PrimaryTerrainRasterizer extends Phase {
         GL45C.glSamplerParameteri(lightSampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     }
 
-    public void raster(int regionCount, int commandBufferId, FrameTimeProfiler frameTimeProfiler) {
+    public void raster(int firstRegion, int regionCount, int commandBufferId, FrameTimeProfiler frameTimeProfiler) {
         shader.bind();
+        MeshShaderDispatcher.INSTANCE.setDrawIdOffset(shader.getId(), firstRegion);
 
         int blockId = Minecraft.getMinecraft()
             .getTextureManager()
@@ -65,16 +66,16 @@ public class PrimaryTerrainRasterizer extends Phase {
         Nvidium.Compat.setTexture(lightId, 1);
 
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, commandBufferId);
-        frameTimeProfiler.startQuery();
+        if (frameTimeProfiler != null) frameTimeProfiler.startQuery();
         int err;
         if ((err = GL30C.glGetError()) != 0) {
             throw new IllegalStateException("GLERROR: " + err);
         }
-        MeshShaderDispatcher.INSTANCE.multiDrawMeshTasksIndirect(0, regionCount, 16);
+        MeshShaderDispatcher.INSTANCE.multiDrawMeshTasksIndirect(firstRegion * 16L, regionCount, 16);
         if ((err = GL30C.glGetError()) != 0) {
             throw new IllegalStateException("GLERROR: " + err);
         }
-        frameTimeProfiler.endQuery();
+        if (frameTimeProfiler != null) frameTimeProfiler.endQuery();
         // glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
         GL45C.glBindSampler(0, 0);
         GL45C.glBindSampler(1, 0);
