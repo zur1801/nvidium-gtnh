@@ -52,6 +52,9 @@ public class NvidiumWorldRenderer {
     private long max_geometry_memory;
     private long last_sample_time;
 
+    private boolean memoryLimitWarned;
+    private long evictedRegions;
+
     public NvidiumWorldRenderer(World world) {
         int frames = Nvidium.Compat.getCpuRenderAheadLimit() + 1;
         // 32 mb upload buffer
@@ -112,8 +115,20 @@ public class NvidiumWorldRenderer {
         }
         renderPipeline.renderFrame(viewport, matrices, x, y, z);
 
-        while (sectionManager.terrainAreana.getUsedMB() > (max_geometry_memory - 100)) {
-            renderPipeline.removeARegion();
+        if (sectionManager.terrainAreana.getUsedMB() > (max_geometry_memory - 100)) {
+            if (!memoryLimitWarned) {
+                memoryLimitWarned = true;
+                Nvidium.LOGGER.warn(
+                    "Terrain needs more than the {} MB of VRAM available to Nvidium; dropping the farthest terrain. "
+                        + "Lower the render distance to keep everything visible.",
+                    max_geometry_memory);
+            }
+            int camChunkX = MathHelper.floor_double(x) >> 4;
+            int camChunkZ = MathHelper.floor_double(z) >> 4;
+            while (sectionManager.terrainAreana.getUsedMB() > (max_geometry_memory - 100)
+                && renderPipeline.removeFarthestRegion(camChunkX, camChunkZ)) {
+                evictedRegions++;
+            }
         }
 
         if (Nvidium.SUPPORTS_PERSISTENT_SPARSE_ADDRESSABLE_BUFFER
@@ -186,6 +201,9 @@ public class NvidiumWorldRenderer {
 
     public void addDebugInfo(ArrayList<String> debugInfo) {
         debugInfo.add("Using nvidium renderer: " + Tags.VERSION);
+        if (evictedRegions > 0) {
+            debugInfo.add("VRAM full: dropped " + evictedRegions + " far regions, lower render distance");
+        }
         if (meshCache != null) {
             meshCache.addDebugInfo(debugInfo);
         }

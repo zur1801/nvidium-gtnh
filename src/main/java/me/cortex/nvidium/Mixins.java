@@ -42,11 +42,19 @@ public enum Mixins implements IMixins {
             "celeritas.MixinSectionLattice",
             "celeritas.MixinSimpleWorldRenderer")
         .setPhase(Phase.EARLY)
-        .addRequiredMod(TargetedMod.ANGELICA)),;
+        .addRequiredMod(TargetedMod.ANGELICA)),
+
+    // Textured Distant Horizons LODs with shader packs (port of upstream Iris)
+    ANGELICA_DH_MIXINS(new MixinBuilder()
+        .addClientMixins("angelica.dh.MixinDHTerrainTransformer", "angelica.dh.MixinIrisLodRenderProgram")
+        .setPhase(Phase.EARLY)
+        .addRequiredMod(TargetedMod.ANGELICA)
+        .addRequiredMod(TargetedMod.DISTANT_HORIZONS)),;
 
     public enum TargetedMod implements ITargetMod {
 
-        ANGELICA("com.gtnewhorizons.angelica.loading.AngelicaTweaker", "angelica");
+        ANGELICA("com.gtnewhorizons.angelica.loading.AngelicaTweaker", "angelica"),
+        DISTANT_HORIZONS("com.seibel.distanthorizons.DistantHorizonsTweaker", "distanthorizons");
 
         private final TargetModBuilder builder;
 

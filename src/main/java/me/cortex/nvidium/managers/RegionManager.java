@@ -319,6 +319,12 @@ public class RegionManager {
         return this.sectionBuffer.getId();
     }
 
+    /** Chebyshev distance in chunks between the camera column and the centre of a region. */
+    public int horizontalDistance(int regionId, int camChunkX, int camChunkZ) {
+        var region = this.regions[regionId];
+        return Math.max(Math.abs((region.rx << 3) + 4 - camChunkX), Math.abs((region.rz << 3) + 4 - camChunkZ));
+    }
+
     public long regionIdToKey(int regionId) {
         if (this.regions[regionId] == null) {
             throw new IllegalStateException();

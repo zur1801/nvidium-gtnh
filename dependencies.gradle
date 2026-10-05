@@ -50,4 +50,6 @@ dependencies {
     implementation("com.github.GTNewHorizons:Angelica:2.2.19:dev")
     compileOnly("org.jetbrains:annotations:24.0.1")
     compileOnly("com.github.GTNewHorizons:lwjgl3ify:2.1.18:dev")
+    // Distant Horizons 1.7.10 port (DarkShadow44/DistantHorizonsStandalone), only its API is used
+    compileOnly(files("../libs/DistantHorizons-upstream-preview7.jar"))
 }

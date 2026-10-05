@@ -497,11 +497,29 @@ public class RenderPipeline {
         regionVisibilityTracking.resetRegion(id);
     }
 
-    public void removeARegion() {
-        removeRegion(
-            regionVisibilityTracking.findMostLikelyLeastSeenRegion(
-                sectionManager.getRegionManager()
-                    .maxRegionIndex()));
+    /**
+     * Frees GPU memory by dropping the region farthest from the camera (horizontally), so that running out of VRAM
+     * shrinks the rendered area from its edge instead of punching holes near the player.
+     *
+     * @return false if there was no region left to remove
+     */
+    public boolean removeFarthestRegion(int camChunkX, int camChunkZ) {
+        var rm = sectionManager.getRegionManager();
+        int farthest = -1;
+        int farthestDistance = -1;
+        for (int i = 0; i < rm.maxRegionIndex(); i++) {
+            if (!rm.regionExists(i)) continue;
+            int distance = rm.horizontalDistance(i, camChunkX, camChunkZ);
+            if (distance > farthestDistance) {
+                farthestDistance = distance;
+                farthest = i;
+            }
+        }
+        if (farthest == -1) {
+            return false;
+        }
+        removeRegion(farthest);
+        return true;
     }
 
     /*
