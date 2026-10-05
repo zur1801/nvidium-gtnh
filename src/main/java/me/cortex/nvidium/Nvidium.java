@@ -72,6 +72,11 @@ public class Nvidium {
     // preInit "Run before anything else. Read your config, create blocks, items, etc, and register them with the
     // GameRegistry." (Remove if not needed)
     public void preInit(FMLPreInitializationEvent event) {
+        if (event.getSide()
+            .isServer()) {
+            // Nvidium is purely a client renderer, and its config uses client-only classes (I18n)
+            return;
+        }
         if (isWithAngelica()) {
             Compat = new AngelicaCompat();
         }
