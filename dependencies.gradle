@@ -41,6 +41,15 @@ minecraft {
 
 
 
+// The Distant Horizons 1.7.10 port is not published to a Maven repository, so fetch the release jar once
+def distantHorizonsJar = file("libs/DistantHorizons-upstream-preview7.jar")
+if (!distantHorizonsJar.exists()) {
+    distantHorizonsJar.parentFile.mkdirs()
+    def url = "https://github.com/DarkShadow44/DistantHorizonsStandalone/releases/download/upstream-preview7/DistantHorizons-upstream-preview7.jar"
+    logger.lifecycle("Downloading Distant Horizons API jar from ${url}")
+    new URL(url).withInputStream { input -> distantHorizonsJar.withOutputStream { it << input } }
+}
+
 dependencies {
     //runtimeOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.8.60-GTNH:dev")
     patchedMinecraft("org.lwjgl:lwjgl-sdl:${lwjglVersion}")
@@ -50,6 +59,6 @@ dependencies {
     implementation("com.github.GTNewHorizons:Angelica:2.2.19:dev")
     compileOnly("org.jetbrains:annotations:24.0.1")
     compileOnly("com.github.GTNewHorizons:lwjgl3ify:2.1.18:dev")
-    // Distant Horizons 1.7.10 port (DarkShadow44/DistantHorizonsStandalone), only its API is used
-    compileOnly(files("../libs/DistantHorizons-upstream-preview7.jar"))
+    // Distant Horizons 1.7.10 port (DarkShadow44/DistantHorizonsStandalone), only its API is used at compile time
+    compileOnly(files(distantHorizonsJar))
 }
