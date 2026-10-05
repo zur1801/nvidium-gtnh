@@ -67,6 +67,13 @@ uint unpackRegionTransformId(Region region) {
     return ((region.b.x >> 30u) | ((region.b.y & 0xFFu) << 2u)) & 0x3FFu;
 }
 
+// The 24-bit depth buffer loses precision with distance (about 5 blocks at 2 km with the 0.05 near plane), so an
+// occlusion box that only clears a surface by a fixed margin randomly passes and fails the depth test from frame to
+// frame, making distant sections flicker. Pad the boxes in proportion to their distance instead (in blocks).
+float occlusionPadding(vec3 relativeBlockPos) {
+    return 0.1 + length(relativeBlockPos) * 0.004;
+}
+
 bool sectionEmpty(ivec4 header) {
     header.y &= ~0x1FF<<17;
     return header == ivec4(0);

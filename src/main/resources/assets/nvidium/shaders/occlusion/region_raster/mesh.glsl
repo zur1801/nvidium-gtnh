@@ -55,8 +55,9 @@ void main() {
     pos -= unpackOriginOffsetId(unpackRegionTransformId(data));
     ivec3 size = unpackRegionSize(data);
 
-    vec3 start = pos - ADD_SIZE;
-    vec3 end = start + 1 + size + (ADD_SIZE*2);
+    float pad = occlusionPadding((vec3(pos) + (vec3(size) + 1.0) * 0.5) * 16.0) / 16.0;
+    vec3 start = pos - pad;
+    vec3 end = start + 1 + size + (pad*2);
 
     //TODO: Look into only doing 4 locals, for 2 reasons, its more effective for reducing duplicate computation and bandwidth
     // it also means that each thread can emit 3 primatives, 9 indicies each

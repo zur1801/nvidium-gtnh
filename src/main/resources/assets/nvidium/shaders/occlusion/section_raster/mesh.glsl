@@ -76,14 +76,18 @@ void main() {
     }
     SET_MESH_OUTPUTS(48,12);
 
-    vec3 mins = (header.xyz&0xF)-ADD_SIZE;
-    vec3 maxs = mins+((header.xyz>>4)&0xF)+1+(ADD_SIZE*2);
     ivec3 chunk = ivec3(header.xyz)>>8;
     chunk.y &= 0x1ff;
     chunk.y <<= 32-9;
     chunk.y >>= 32-9;
 
     ivec3 relativeChunkPos = (chunk + chunkShift);
+
+    vec3 localMin = vec3(header.xyz&0xF);
+    vec3 localMax = localMin+((header.xyz>>4)&0xF)+1;
+    float pad = occlusionPadding(vec3(relativeChunkPos<<4) + (localMin + localMax) * 0.5);
+    vec3 mins = localMin - pad;
+    vec3 maxs = localMax + pad;
     vec3 corner = vec3(relativeChunkPos<<4);
     vec3 cornerCopy = corner;
 
